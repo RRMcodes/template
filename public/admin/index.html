@@ -8,5 +8,15 @@
 </head>
 <body>
   <script src="https://unpkg.com/decap-cms@^3.0.0/dist/decap-cms.js"></script>
+  <script>
+    // Diagnostic listener to see if the callback message arrives
+    window.addEventListener('message', (event) => {
+      console.log("Admin window received message from:", event.origin);
+      console.log("Message data:", event.data);
+      if (typeof event.data === 'string' && event.data.startsWith('authorization:')) {
+        console.log("Handshake detected! CMS should be logging you in now...");
+      }
+    }, false);
+  </script>
 </body>
 </html>
