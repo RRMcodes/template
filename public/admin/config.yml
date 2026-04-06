@@ -11,7 +11,7 @@ public_folder: "/assets/images/uploads"
 collections:
   - name: "posts"
     label: "Posts"
-    folder: "content/posts"
+    folder: "public/content/posts"
     create: true
     slug: "{{year}}-{{month}}-{{day}}-{{slug}}"
     fields:
@@ -24,7 +24,7 @@ collections:
     files:
       - label: "Home Page"
         name: "home"
-        file: "content/home.json"
+        file: "public/content/home.json"
         fields:
           - {label: "Hero Title", name: "hero_title", widget: "string"}
           - {label: "Hero Subtitle", name: "hero_subtitle", widget: "string"}
