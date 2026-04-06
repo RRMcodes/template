@@ -41,26 +41,41 @@ module.exports = async (req, res) => {
     // Return HTML to handle communication with CMS window
     const script = `
       <html>
+      <head><title>Logging you in...</title></head>
       <body style="background:#111; color:#fff; font-family:sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; margin:0;">
         <div style="text-align:center; padding:20px;">
           <h3 id="status">Syncing with CMS...</h3>
-          <p style="font-size:0.8rem; opacity:0.7;">This window should close automatically.</p>
+          <p id="sub-status" style="font-size:0.8rem; opacity:0.7;">Handshaking with the main window.</p>
+          <div id="debug" style="display:none; margin-top:20px; font-family:monospace; font-size:0.7rem; color:#888;"></div>
         </div>
         <script>
           const tokenData = ${JSON.stringify({ token: access_token, provider: 'github' })};
           const message = 'authorization:github:success:' + JSON.stringify(tokenData);
           
           function registrate() {
-            // Send to opener with a wildcard fallback if origin check fails
-            window.opener.postMessage(message, "*");
+            const debugEl = document.getElementById('debug');
+            debugEl.style.display = 'block';
             
-            // Auto-close quickly
-            setTimeout(() => {
-              window.close();
-            }, 1000);
+            if (!window.opener) {
+              debugEl.innerText = "Error: window.opener is missing. Ensure your browser isn't blocking popups.";
+              document.getElementById('status').innerText = 'Handshake Failed';
+              document.getElementById('sub-status').innerText = 'Please check your popup settings.';
+              return;
+            }
+
+            try {
+              // Try wildcard first to ensure it reaches, then try explicit location
+              window.opener.postMessage(message, "*");
+              document.getElementById('status').innerText = 'Success!';
+              document.getElementById('sub-status').innerText = 'Closing now...';
+              setTimeout(() => window.close(), 1000);
+            } catch (e) {
+              debugEl.innerText = "Error: " + e.message;
+            }
           }
 
-          registrate();
+          // Delay for a moment to let the browser stabilize
+          setTimeout(registrate, 500);
         </script>
       </body>
       </html>
