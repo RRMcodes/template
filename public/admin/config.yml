@@ -2,7 +2,7 @@ backend:
   name: github
   repo: rrmcodes/template
   branch: main
-  auth_type: implicit
+  auth_type: pkce
   app_id: Ov23liAXY8yMVpTVUFjs
 
 media_folder: "public/assets/images/uploads"
