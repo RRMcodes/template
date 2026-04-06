@@ -1,8 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const postsDir = path.join(__dirname, 'content', 'posts');
-const manifestFile = path.join(__dirname, 'content', 'posts-manifest.json');
+const postsDir = path.join(__dirname, 'public', 'content', 'posts');
+const manifestFile = path.join(__dirname, 'public', 'content', 'posts-manifest.json');
 
 try {
   // Ensure the directory exists
