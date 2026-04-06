@@ -2,10 +2,10 @@ backend:
   name: github
   repo: rrmcodes/template
   branch: main
-  base_url: https://www.reganrajmaharjan.com.np/
-  auth_endpoint: api/auth
+  auth_type: implicit
+  app_id: Ov23liAXY8yMVpTVUFjs
 
-media_folder: "assets/images/uploads"
+media_folder: "public/assets/images/uploads"
 public_folder: "/assets/images/uploads"
 
 collections:
