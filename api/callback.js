@@ -4,8 +4,12 @@ module.exports = async (req, res) => {
   const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
 
   if (!code) {
-    return res.status(400).send("No code provided.");
+    return res.status(400).send("Login failed: No authorization code received from GitHub.");
   }
+
+  // Use a controller to set a timeout for the fetch
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
   try {
     const response = await fetch('https://github.com/login/oauth/access_token', {
@@ -14,6 +18,7 @@ module.exports = async (req, res) => {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
+      signal: controller.signal,
       body: JSON.stringify({
         client_id: GITHUB_CLIENT_ID,
         client_secret: GITHUB_CLIENT_SECRET,
@@ -21,29 +26,51 @@ module.exports = async (req, res) => {
       }),
     });
 
+    clearTimeout(timeoutId);
     const data = await response.json();
 
     if (data.error) {
-      return res.status(500).send(`GitHub OAuth Error: ${data.error_description}`);
+      return res.status(500).send(`GitHub OAuth Error: ${data.error_description || data.error}. Check Client Secret in Vercel.`);
     }
 
     const { access_token } = data;
 
-    // Send the token back to the CMS window
+    if (!access_token) {
+      return res.status(500).send("Login failed: GitHub did not return an access token.");
+    }
+
+    // Return HTML to handle communication with CMS window
     const script = `
       <html>
-      <body style="background:transparent; color:#fff; font-family:sans-serif; text-align:center;">
-        <p>Authenticating...</p>
+      <body style="background:#111; color:#fff; font-family:sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; margin:0;">
+        <div style="text-align:center; padding:20px;">
+          <h3 id="status">Syncing with CMS...</h3>
+          <p style="font-size:0.8rem; opacity:0.7;">This window should close automatically.</p>
+          <button id="manual-btn" style="display:none; background:#555; color:#fff; border:none; padding:10px 20px; cursor:pointer;" onclick="registrate()">Force Finish Login</button>
+        </div>
         <script>
-          (function() {
-            function registrate() {
-              window.opener.postMessage(
-                'authorization:github:success:${JSON.stringify({ token: access_token, provider: 'github' })}',
-                window.location.origin
-              );
+          const tokenData = ${JSON.stringify({ token: access_token, provider: 'github' })};
+          const message = 'authorization:github:success:' + JSON.stringify(tokenData);
+          
+          function registrate() {
+            try {
+              window.opener.postMessage(message, window.location.origin);
+              document.getElementById('status').innerText = 'LoggedIn Successfully!';
+              setTimeout(() => window.close(), 1000);
+            } catch (e) {
+              console.error('PostMessage failed:', e);
+              // Fallback to wildcard if origin check fails (rare)
+              window.opener.postMessage(message, "*");
             }
-            registrate();
-          })();
+          }
+
+          // Initial attempt
+          registrate();
+
+          // Show manual button if it doesn't close in 5 seconds
+          setTimeout(() => {
+            document.getElementById('manual-btn').style.display = 'inline-block';
+          }, 5000);
         </script>
       </body>
       </html>
@@ -51,7 +78,8 @@ module.exports = async (req, res) => {
 
     res.send(script);
   } catch (error) {
+    clearTimeout(timeoutId);
     console.error("OAuth callback error:", error);
-    res.status(500).send("Internal server error.");
+    res.status(500).send("Login Timeout or Error. Please try again. " + (error.name === 'AbortError' ? "GitHub took too long to respond." : error.message));
   }
 };
