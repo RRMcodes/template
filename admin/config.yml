@@ -2,6 +2,8 @@ backend:
   name: github
   repo: reganraj/portfolio
   branch: main
+  base_url: https://your-site-url.vercel.app
+  auth_endpoint: api/auth
 
 local_backend: true
 
