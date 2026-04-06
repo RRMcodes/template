@@ -1,9 +1,9 @@
 backend:
   name: github
-  repo: reganraj/portfolio
+  repo: rrmcodes/template
   branch: main
   base_url: https://www.reganrajmaharjan.com.np
-  auth_endpoint: /api/auth
+  auth_endpoint: api/auth
 
 media_folder: "assets/images/uploads"
 public_folder: "/assets/images/uploads"
