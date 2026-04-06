@@ -1,5 +1,3 @@
-const fetch = require('node-fetch');
-
 module.exports = async (req, res) => {
   const code = req.query.code;
   const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID;
@@ -33,17 +31,22 @@ module.exports = async (req, res) => {
 
     // Send the token back to the CMS window
     const script = `
-      <script>
-        (function() {
-          function registrate() {
-            window.opener.postMessage(
-              'authorization:github:success:${JSON.stringify({ token: access_token, provider: 'github' })}',
-              window.location.origin
-            );
-          }
-          registrate();
-        })();
-      </script>
+      <html>
+      <body style="background:transparent; color:#fff; font-family:sans-serif; text-align:center;">
+        <p>Authenticating...</p>
+        <script>
+          (function() {
+            function registrate() {
+              window.opener.postMessage(
+                'authorization:github:success:${JSON.stringify({ token: access_token, provider: 'github' })}',
+                window.location.origin
+              );
+            }
+            registrate();
+          })();
+        </script>
+      </body>
+      </html>
     `;
 
     res.send(script);
