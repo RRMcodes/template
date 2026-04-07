@@ -171,11 +171,22 @@
 				<!-- Blog Tab -->
 				<div id="tab-blog" class="tab-content" style="display:none;">
 					<section class="post">
-						<header class="major">
-							<h2>Blog</h2>
-						</header>
+						<div id="blog-filters" style="margin-bottom: 2rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center;">
+							<div style="flex-grow: 1; min-width: 250px;">
+								<input type="text" id="blog-search" placeholder="Search posts..." style="width: 100%;" />
+							</div>
+							<div id="category-filters" style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+								<!-- Categories will be injected here -->
+							</div>
+						</div>
+						<div id="tag-filters" style="margin-bottom: 2rem; display: flex; flex-wrap: wrap; gap: 0.5rem; font-size: 0.8rem;">
+							<!-- Tags will be injected here -->
+						</div>
 						<div id="blog-posts-container">
 							<p>Loading posts...</p>
+						</div>
+						<div id="blog-pagination" style="text-align: center; margin-top: 3rem; display: none;">
+							<button id="load-more-posts" class="button">Load More Posts</button>
 						</div>
 					</section>
 				</div>
@@ -186,23 +197,35 @@
 			<div id="tab-contact" class="tab-content" style="display:none;">
 				<footer id="footer">
 					<section>
-						<form method="post" action="#">
+						<div data-fs-success style="display:none; padding: 2rem; border: 2px solid #00ff00; margin-bottom: 2rem; text-align: center;">
+							<h3>Message Sent!</h3>
+							<p>Thank you for reaching out. I'll get back to you as soon as possible.</p>
+						</div>
+						<div data-fs-error style="display:none; padding: 2rem; border: 2px solid #ff0000; margin-bottom: 2rem; text-align: center;">
+							<h3>Oops!</h3>
+							<p>There was a problem sending your message. Please try again.</p>
+						</div>
+
+						<form id="contact-form">
 							<div class="fields">
 								<div class="field">
 									<label for="name">Name</label>
-									<input type="text" name="name" id="name" />
+									<input type="text" name="name" id="name" data-fs-field required />
+									<span data-fs-error="name" style="color: #ff4444; font-size: 0.8rem;"></span>
 								</div>
 								<div class="field">
 									<label for="email">Email</label>
-									<input type="text" name="email" id="email" />
+									<input type="email" name="email" id="email" data-fs-field required />
+									<span data-fs-error="email" style="color: #ff4444; font-size: 0.8rem;"></span>
 								</div>
 								<div class="field">
 									<label for="message">Message</label>
-									<textarea name="message" id="message" rows="3"></textarea>
+									<textarea name="message" id="message" rows="3" data-fs-field required></textarea>
+									<span data-fs-error="message" style="color: #ff4444; font-size: 0.8rem;"></span>
 								</div>
 							</div>
 							<ul class="actions">
-								<li><input type="submit" value="Send Message" /></li>
+								<li><input type="submit" value="Send Message" data-fs-submit-btn /></li>
 							</ul>
 						</form>
 					</section>
@@ -247,7 +270,12 @@
 		<script src="assets/js/main.js"></script>
 		<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 		<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+		<script src="https://unpkg.com/@formspree/ajax@1" defer></script>
 		<script>
+			// ── Formspree Initialization ─────────────────────────────────
+			window.formspree = window.formspree || function () { (formspree.q = formspree.q || []).push(arguments); };
+			formspree('initForm', { formElement: '#contact-form', formId: 'xqegnbjr' });
+
 			// ── Tab switching ──────────────────────────────────────────────
 			function switchTab(evt, tabId) {
 				if (evt) evt.preventDefault();
@@ -262,13 +290,21 @@
 				}
 				
 				document.getElementById('nav').scrollIntoView({ behavior: 'smooth' });
+				
+				// Update hash for permalinks
+				window.location.hash = tabId.replace('tab-', '');
 			}
 
-			// Auto open blog tab if returning from a post
-			if (window.location.hash === '#blog' || window.location.hash === '#tab-blog') {
-				// Give DOM a tiny moment to parse before switching
-				setTimeout(() => switchTab(null, 'tab-blog'), 100);
-			}
+			// Auto open tab based on hash
+			window.addEventListener('load', () => {
+				const hash = window.location.hash;
+				if (hash) {
+					const tabId = 'tab-' + hash.substring(1);
+					if (document.getElementById(tabId)) {
+						switchTab(null, tabId);
+					}
+				}
+			});
 
 			// ── Dynamic hero from CMS content ────────────────────────────
 			fetch('content/home.json')
@@ -286,88 +322,203 @@
 					// Fallback: keep the static defaults already in the HTML
 				});
 
+			// ── Blog State ───────────────────────────────────────────────
+			let allPosts = [];
+			let filteredPosts = [];
+			let postsPerPage = 5;
+			let currentPage = 1;
+			let activeCategory = 'All';
+			let activeTag = null;
+			let searchQuery = '';
+
 			// ── Blog post listing ────────────────────────────────────────
-			// posts-manifest.json lists all post filenames so no dir listing is needed.
 			fetch('content/posts-manifest.json')
 				.then(r => r.json())
-				.then(files => renderBlogPosts(files))
+				.then(files => {
+					const promises = files.map(file =>
+						fetch(`content/posts/${file}`)
+							.then(r => r.text())
+							.then(md => parseMdPost(md, file))
+							.catch(() => null)
+					);
+
+					Promise.all(promises).then(posts => {
+						allPosts = posts.filter(Boolean).sort((a, b) => new Date(b.date) - new Date(a.date));
+						renderFilters();
+						applyFilters();
+					});
+				})
 				.catch((err) => {
 					console.error("Failed to load posts manifest:", err);
-					document.getElementById('blog-posts-container').innerHTML = '<p>Error loading posts manifest. Please try again later.</p>';
+					document.getElementById('blog-posts-container').innerHTML = '<p>Error loading blog posts. Please try again later.</p>';
 				});
-
-			function renderBlogPosts(files) {
-				const container = document.getElementById('blog-posts-container');
-				if (!files || files.length === 0) {
-					container.innerHTML = '<p>No posts yet.</p>';
-					return;
-				}
-				container.innerHTML = '';
-
-				const promises = files.map(file =>
-					fetch(`content/posts/${file}`)
-						.then(r => r.text())
-						.then(md => parseMdPost(md, file))
-						.catch(() => null)
-				);
-
-				Promise.all(promises).then(posts => {
-					// Sort descending by date
-					posts = posts.filter(Boolean).sort((a, b) => new Date(b.date) - new Date(a.date));
-					if (posts.length === 0) {
-						container.innerHTML = '<p>No posts yet.</p>';
-						return;
-					}
-					posts.forEach(post => {
-						const safeExcerpt = DOMPurify.sanitize(post.excerpt);
-						
-						let humanDate = post.date;
-						try {
-							if (post.date) {
-								const d = new Date(post.date);
-								if (!isNaN(d)) {
-									humanDate = d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-								}
-							}
-						} catch(e) {}
-
-						container.insertAdjacentHTML('beforeend', `
-							<article style="margin-bottom:2rem;padding-bottom:2rem;border-bottom:1px solid rgba(255,255,255,.15);">
-								<header>
-									<span class="date">${humanDate}</span>
-									<h3><a href="/post/${post.slug}">${DOMPurify.sanitize(post.title)}</a></h3>
-								</header>
-								<p>${safeExcerpt}</p>
-								<a href="/post/${post.slug}" class="button small">Read Full Post</a>
-							</article>
-						`);
-					});
-				});
-			}
 
 			function parseMdPost(markdown, filename) {
 				const fmRegex = /^---\r?\n([\s\S]+?)\r?\n---/;
 				const match   = markdown.match(fmRegex);
-				let title  = 'Untitled';
-				let date   = '';
-				let body   = markdown;
+				let title = 'Untitled';
+				let date  = '';
+				let image = '';
+				let category = 'Uncategorized';
+				let tags = [];
+				let excerpt = '';
+				let body  = markdown;
 
 				if (match) {
 					const fm = match[1];
-					const t  = fm.match(/title:\s*"?([^"\r\n]+)"?/);
-					const d  = fm.match(/date:\s*"?([^"\r\n]+)"?/);
-					if (t) title = t[1].trim();
-					if (d) date  = d[1].trim();
+					
+					// Title
+					const tMatch = fm.match(/title:\s*"?([^"\r\n]+)"?/);
+					if (tMatch) title = tMatch[1].trim();
+					
+					// Date
+					const dMatch = fm.match(/date:\s*"?([^"\r\n]+)"?/);
+					if (dMatch) date = dMatch[1].trim();
+					
+					// Image
+					const iMatch = fm.match(/image:\s*"?([^"\r\n]+)"?/);
+					if (iMatch) image = iMatch[1].trim();
+					
+					// Category
+					const cMatch = fm.match(/category:\s*"?([^"\r\n]+)"?/);
+					if (cMatch) category = cMatch[1].trim();
+					
+					// Tags
+					const tgMatch = fm.match(/tags:\n((?:\s*-\s*.+\n?)+)/);
+					if (tgMatch) {
+						tags = tgMatch[1].split('\n')
+							.map(line => line.replace(/^\s*-\s*/, '').trim())
+							.filter(tag => tag !== '');
+					} else {
+						// Inline array format [tag1, tag2]
+						const tgInline = fm.match(/tags:\s*\[(.+)\]/);
+						if (tgInline) {
+							tags = tgInline[1].split(',').map(tag => tag.trim().replace(/^"|"$/g, ''));
+						}
+					}
+
+					// Excerpt
+					const eMatch = fm.match(/excerpt:\s*"?([^"\r\n]+)"?/);
+					if (eMatch) excerpt = eMatch[1].trim();
+
 					body = markdown.slice(match[0].length).trim();
 				}
 
-				// Plain-text excerpt (strip markdown syntax)
-				const plainText = body.replace(/[#*`>\[\]!]/g, '').replace(/\n+/g, ' ').trim();
-				const excerpt   = plainText.substring(0, 160) + (plainText.length > 160 ? '…' : '');
-				const slug      = filename.replace(/\.md$/, '');
+				if (!excerpt) {
+					const plainText = body.replace(/[#*`>\[\]!]/g, '').replace(/\n+/g, ' ').trim();
+					excerpt = plainText.substring(0, 160) + (plainText.length > 160 ? '…' : '');
+				}
 
-				return { title, date, excerpt, slug };
+				const slug = filename.replace(/\.md$/, '');
+				return { title, date, image, category, tags, excerpt, slug, body };
 			}
+
+			function renderFilters() {
+				const categories = ['All', ...new Set(allPosts.map(p => p.category))];
+				const catContainer = document.getElementById('category-filters');
+				catContainer.innerHTML = categories.map(cat => `
+					<button class="button small ${cat === activeCategory ? 'primary' : ''}" onclick="setCategory('${cat}')">${cat}</button>
+				`).join('');
+
+				const tags = [...new Set(allPosts.flatMap(p => p.tags))];
+				const tagContainer = document.getElementById('tag-filters');
+				if (tags.length > 0) {
+					tagContainer.innerHTML = '<span>Tags:</span> ' + tags.map(tag => `
+						<a href="#" style="text-decoration:none; margin-right: 0.5rem; opacity: ${tag === activeTag ? '1' : '0.6'}; font-weight: ${tag === activeTag ? 'bold' : 'normal'}" onclick="setTag(event, '${tag}')">#${tag}</a>
+					`).join('');
+				}
+			}
+
+			function setCategory(cat) {
+				activeCategory = cat;
+				activeTag = null;
+				currentPage = 1;
+				renderFilters();
+				applyFilters();
+			}
+
+			function setTag(evt, tag) {
+				if (evt) evt.preventDefault();
+				if (activeTag === tag) {
+					activeTag = null;
+				} else {
+					activeTag = tag;
+				}
+				currentPage = 1;
+				renderFilters();
+				applyFilters();
+			}
+
+			document.getElementById('blog-search').addEventListener('input', (e) => {
+				searchQuery = e.target.value.toLowerCase();
+				currentPage = 1;
+				applyFilters();
+			});
+
+			function applyFilters() {
+				filteredPosts = allPosts.filter(post => {
+					const matchesSearch = post.title.toLowerCase().includes(searchQuery) || 
+										 post.excerpt.toLowerCase().includes(searchQuery) ||
+										 post.body.toLowerCase().includes(searchQuery);
+					const matchesCategory = activeCategory === 'All' || post.category === activeCategory;
+					const matchesTag = !activeTag || post.tags.includes(activeTag);
+					return matchesSearch && matchesCategory && matchesTag;
+				});
+				renderBlogPosts();
+			}
+
+			function renderBlogPosts() {
+				const container = document.getElementById('blog-posts-container');
+				const pagination = document.getElementById('blog-pagination');
+				
+				if (filteredPosts.length === 0) {
+					container.innerHTML = '<p>No posts found matching your criteria.</p>';
+					pagination.style.display = 'none';
+					return;
+				}
+
+				const visiblePosts = filteredPosts.slice(0, currentPage * postsPerPage);
+				container.innerHTML = '';
+
+				visiblePosts.forEach(post => {
+					let humanDate = post.date;
+					try {
+						if (post.date) {
+							const d = new Date(post.date);
+							if (!isNaN(d)) {
+								humanDate = d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+							}
+						}
+					} catch(e) {}
+
+					container.insertAdjacentHTML('beforeend', `
+						<article style="margin-bottom:3rem; padding-bottom:2rem; border-bottom:1px solid rgba(255,255,255,0.1);">
+							${post.image ? `<a href="/post/${post.slug}" class="image fit"><img src="${post.image}" alt="${post.title}" style="max-height: 300px; object-fit: cover;" /></a>` : ''}
+							<header>
+								<span class="date">${humanDate}</span>
+								<span style="display:inline-block; margin-left: 1rem; padding: 0.1rem 0.6rem; background: rgba(255,255,255,0.1); border-radius: 4px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase;">${post.category}</span>
+								<h3><a href="/post/${post.slug}">${DOMPurify.sanitize(post.title)}</a></h3>
+							</header>
+							<p>${DOMPurify.sanitize(post.excerpt)}</p>
+							<div style="margin-bottom: 1.5rem;">
+								${post.tags.map(tag => `<span style="margin-right: 0.8rem; font-size: 0.8rem; opacity: 0.7;">#${tag}</span>`).join('')}
+							</div>
+							<a href="/post/${post.slug}" class="button small">Read Full Post</a>
+						</article>
+					`);
+				});
+
+				if (filteredPosts.length > visiblePosts.length) {
+					pagination.style.display = 'block';
+				} else {
+					pagination.style.display = 'none';
+				}
+			}
+
+			document.getElementById('load-more-posts').addEventListener('click', () => {
+				currentPage++;
+				renderBlogPosts();
+			});
 		</script>
 	</body>
 </html>

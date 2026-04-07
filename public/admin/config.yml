@@ -17,6 +17,10 @@ collections:
     fields:
       - {label: "Title", name: "title", widget: "string"}
       - {label: "Publish Date", name: "date", widget: "datetime"}
+      - {label: "Featured Image", name: "image", widget: "image", required: false}
+      - {label: "Category", name: "category", widget: "string", required: false}
+      - {label: "Tags", name: "tags", widget: "list", required: false}
+      - {label: "Excerpt", name: "excerpt", widget: "text", required: false, hint: "Short description shown on blog cards (auto-generated if blank)."}
       - {label: "Body", name: "body", widget: "markdown"}
 
   - name: "pages"

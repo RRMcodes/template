@@ -1,4 +1,6 @@
 {
+  "buildCommand": "node generate-manifest.js",
+  "outputDirectory": "public",
   "rewrites": [
     {
       "source": "/post/:slug",
